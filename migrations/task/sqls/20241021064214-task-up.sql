@@ -1,3 +1,32 @@
+-- 每個工具的角色與如何互相協作
+-- Docker：
+-- 使用 Docker 來容器化 PostgreSQL 資料庫，是為了確保每個開發者的開發環境一致，不管是本地還是 CI/CD 環境。這樣可以避免因為不同的操作系統或軟體版本造成的環境差異問題，確保每個開發者都可以在一個相同的環境中執行 PostgreSQL。例如，開發者可以快速啟動一個包含 PostgreSQL 的容器，並在其中進行資料庫的開發和測試。
+-- DBeaver：
+-- DBeaver 是一個 SQL 客戶端工具，可以用來直接操控 PostgreSQL 資料庫。開發者可以透過 DBeaver 來寫 SQL 查詢、管理資料庫結構、查看資料等。它與 Docker 運行的 PostgreSQL 容器相連接，讓開發者可以在本地環境中輕鬆管理資料庫。
+-- GitHub Actions：
+-- GitHub Actions 是一個 CI/CD 工具，可以讓你在每次 push 代碼至 Git 儲存庫時自動執行指定的腳本。這可以用來執行測試、建構、部署等流程。在你的情境中，GitHub Actions 主要是用來在每次 push 代碼時執行自動化流程，例如跑單元測試、檢查程式碼風格等，這樣可以確保代碼的品質，並且在推送代碼之前發現問題。
+
+-- 組合的效果：
+-- DBeaver + PostgreSQL (Docker)：
+-- 在開發過程中，開發者可以使用 DBeaver 來操作運行在 Docker 容器中的 PostgreSQL 資料庫，確保資料庫操作和 SQL 查詢的正確性。這樣開發者能夠在本地進行資料庫測試，確保資料庫邏輯不會出錯。
+
+-- GitHub Actions + Docker：
+-- 當開發者將代碼推送至 Git 儲存庫時，GitHub Actions 可以自動執行測試和部署流程，並且在 CI/CD 環境中運行 Docker 容器，這樣可以模擬真實環境並執行測試，避免環境差異造成的問題。
+
+-- GitHub Actions + DBeaver：
+-- 雖然 GitHub Actions 主要用來執行代碼測試和建構，但在某些情況下，你可能會希望把資料庫的測試整合進去，這時候可以使用 GitHub Actions 來執行資料庫的 migration 或是測試資料庫連接等操作，然後再用 DBeaver 驗證結果。
+
+-- 總結來說，這些工具組合起來，能夠確保開發環境的一致性、資料庫操作的正確性，並且提供自動化測試和版本控制，讓開發過程更加順利。
+
+------------------------------------------------------------
+
+-- 練習流程
+-- 1. 在 DBeaver 撰寫 SQL
+-- 2. 回到 VSCode，把 SQL 存到 migration 檔案
+-- 3. Git Push（更新專案）
+-- 4. 在 DBeaver 點 Refresh，確保看到最新變更
+
+------------------------------------------------------------
 
 -- ████████  █████   █     █ 
 --   █ █   ██    █  █     ██ 
@@ -14,15 +43,35 @@
 --     4. 用戶名稱為`好野人`，Email 為`richman@hexschooltest.io`，Role為`USER`
 --     5. 用戶名稱為`Q太郎`，Email 為`starplatinum@hexschooltest.io`，Role為`USER`
 --     6. 用戶名稱為 透明人，Email 為 opacity0@hexschooltest.io，Role 為 USER
+insert into "USER" (name, email, "role") values
+('李燕容', 'lee2000@hexschooltest.io', 'USER'),
+('王小明', 'wXlTq@hexschooltest.io', 'USER'),
+('肌肉棒子', 'muscle@hexschooltest.io', 'USER'),
+('好野人', 'richman@hexschooltest.io', 'USER'),
+('Q太郎', 'starplatinum@hexschooltest.io', 'USER'),
+('透明人', 'opacity0@hexschooltest.io', 'USER');
 
 -- 1-2 修改：用 Email 找到 李燕容、肌肉棒子、Q太郎，如果他的 Role 為 USER 將他的 Role 改為 COACH
+update "USER"
+set "role" = 'COACH'
+where email in (
+  'lee2000@hexschooltest.io',
+  'muscle@hexschooltest.io',
+  'starplatinum@hexschooltest.io'
+)
+and "role" = 'USER';
 
 -- 1-3 刪除：刪除USER 資料表中，用 Email 找到透明人，並刪除該筆資料
+delete from "USER"
+where email = 'opacity0@hexschooltest.io';
 
 -- 1-4 查詢：取得USER 資料表目前所有用戶數量（提示：使用count函式）
+select
+  count(*) as 所有用戶數量
+from "USER";
 
 -- 1-5 查詢：取得 USER 資料表所有用戶資料，並列出前 3 筆（提示：使用limit語法）
-
+select * from "USER" limit 3;
 
 --  ████████  █████   █    ████  
 --    █ █   ██    █  █         █ 
