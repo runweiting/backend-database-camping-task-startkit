@@ -73,6 +73,7 @@ from "USER";
 -- 1-5 查詢：取得 USER 資料表所有用戶資料，並列出前 3 筆（提示：使用limit語法）
 select * from "USER" limit 3;
 
+
 ------------------------------------------------------------
 
 --  ████████  █████   █    ████  
@@ -114,6 +115,7 @@ insert into "CREDIT_PURCHASE" (user_id ,credit_package_id, purchased_credits, pr
   (select price from "CREDIT_PACKAGE" where name = '14 堂組合包方案')
 );
 
+
 ------------------------------------------------------------
 
 -- ████████  █████   █    ████   
@@ -127,17 +129,147 @@ insert into "CREDIT_PURCHASE" (user_id ,credit_package_id, purchased_credits, pr
     -- 1. 將用戶`李燕容`新增為教練，並且年資設定為2年（提示：使用`李燕容`的email ，取得 `李燕容` 的 `id` ）
     -- 2. 將用戶`肌肉棒子`新增為教練，並且年資設定為2年
     -- 3. 將用戶`Q太郎`新增為教練，並且年資設定為2年
+insert into "COACH" (user_id, experience_years) values
+((select id from "USER" where email = 'lee2000@hexschooltest.io'), 2),
+((select id from "USER" where email = 'muscle@hexschooltest.io'), 2),
+((select id from "USER" where email = 'starplatinum@hexschooltest.io'), 2);
+
+-- 顯示結果 =====================
+-- select
+--   "COACH".id as 編號,
+--   "USER".name as 姓名,
+--   "COACH".experience_years
+-- from "COACH"
+-- inner join "USER" on "COACH".user_id = "USER".id;
 
 -- 3-2. 新增：承1，為三名教練新增專長資料至 `COACH_LINK_SKILL` ，資料需求如下：
     -- 1. 所有教練都有 `重訓` 專長
     -- 2. 教練`肌肉棒子` 需要有 `瑜伽` 專長
     -- 3. 教練`Q太郎` 需要有 `有氧運動` 與 `復健訓練` 專長
+    -- 資料整理 =====================
+    -- lee2000@hexschooltest.io 重訓
+    -- muscle@hexschooltest.io 重訓、瑜伽
+    -- starplatinum@hexschooltest.io 重訓、有氧運動、復健訓練`
+-- A. 先嘗試寫一個教練、一個專長
+insert into "COACH_LINK_SKILL" (coach_id, skill_id) values 
+(
+  (select id from "COACH" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')),
+  (select id from "SKILL" where name = '重訓')
+);
+
+-- 顯示結果 =====================
+-- 1. 一個教練有多個專長，會產生多行資料，每一行對應一個專長。
+-- select 
+--   "USER".name as 教練姓名,
+--   "SKILL".name as 專長
+-- from "COACH_LINK_SKILL"
+-- inner join "SKILL" on "COACH_LINK_SKILL".skill_id = "SKILL".id
+-- inner join "COACH" on "COACH_LINK_SKILL".coach_id = "COACH".id
+-- inner join "USER" on "COACH".user_id = "USER".id;
+-- 2. STRING_AGG(欄位名稱, '分隔符號') 可以將多行資料合併成一行，並用分隔符號分隔。
+-- STRING_AGG() 中的 AGG 是 Aggregate（聚合） 的縮寫，表示這是一個聚合函數，聚合函數用來對多行資料執行計算，然後回傳一個單一的結果。例如：SUM()、COUNT()、AVG()、MAX()、MIN()、STRING_AGG()
+-- 🎯 STRING_AGG()：會將「多行」的資料合併成一個字串，與 SUM() 把多個數值相加類似。
+-- select 
+--   "USER".name as 教練姓名,
+--   STRING_AGG("SKILL".name, ', ') as 專長
+-- from "COACH_LINK_SKILL"
+-- inner join "SKILL" on "COACH_LINK_SKILL".skill_id = "SKILL".id
+-- inner join "COACH" on "COACH_LINK_SKILL".coach_id = "COACH".id
+-- inner join "USER" on "COACH".user_id = "USER".id
+-- group by "USER".name;
+
+-- B. 嘗試寫一個教練、多個專長
+-- insert into "COACH_LINK_SKILL" (coach_id, skill_id) values
+-- (
+--   (select id from "COACH" where user_id = (select id from "USER" where email = 'muscle@hexschooltest.io')),
+--   (select id from "SKILL" where name in ('重訓', '瑜伽'))
+-- );
+-- ❌ 錯誤原因 → IN 返回多個值，而 INSERT INTO "COACH_LINK_SKILL" 期望的是單一 skill_id。
+-- ✅ 解決方案 → 將每個專長 skill_id 分開插入，用 INSERT ... SELECT 批量插入：
+insert into "COACH_LINK_SKILL" (coach_id, skill_id)
+-- 先把欄位都選起來，再一起插入
+select
+  -- 只會回傳單一 coach_id
+  (select id from "COACH" where user_id = (select id from "USER" where email = 'muscle@hexschooltest.io')),
+  -- 會回傳多個 skill_id
+  id
+from "SKILL"
+where name in ('重訓', '瑜伽');
+
+-- 顯示結果 =====================
+-- 1. 顯示多行資料
+-- select 
+--    "USER".name as 教練姓名,
+--    "SKILL".name as 專長
+-- from "COACH_LINK_SKILL"
+-- inner join "SKILL" on "COACH_LINK_SKILL".skill_id = "SKILL".id
+-- inner join "COACH" on "COACH_LINK_SKILL".coach_id = "COACH".id
+-- inner join "USER" on "COACH".user_id = "USER".id
+-- group by "USER".name, "SKILL".name;
+-- 2. 顯示 STRING_AGG
+-- select 
+--    "USER".name as 教練姓名,
+--    string_agg("SKILL".name, ', ') as 專長
+-- from "COACH_LINK_SKILL"
+-- inner join "SKILL" on "COACH_LINK_SKILL".skill_id = "SKILL".id
+-- inner join "COACH" on "COACH_LINK_SKILL".coach_id = "COACH".id
+-- inner join "USER" on "COACH".user_id = "USER".id
+-- group by "USER".name;
+
+-- C. 一個教練、多個專長
+insert into "COACH_LINK_SKILL" (coach_id, skill_id)
+-- 先把欄位都選起來，再一起插入
+select
+  (select id from "COACH" where user_id = (select id from "USER" where email = 'starplatinum@hexschooltest.io')),
+  id
+from "SKILL" where name in ('重訓', '有氧運動', '復健訓練');
+
+-- 顯示結果 =====================
+-- select 
+--   "USER".name as 教練姓名,
+--   string_agg("SKILL".name, ', ') as 專長
+-- from "COACH_LINK_SKILL"
+-- inner join "SKILL" on "COACH_LINK_SKILL".skill_id = "SKILL".id
+-- inner join "COACH" on "COACH_LINK_SKILL".coach_id = "COACH".id
+-- inner join "USER" on "COACH".user_id = "USER".id
+-- group by "USER".name;
 
 -- 3-3 修改：更新教練的經驗年數，資料需求如下：
     -- 1. 教練`肌肉棒子` 的經驗年數為3年
     -- 2. 教練`Q太郎` 的經驗年數為5年
+update "COACH"
+set experience_years = 3
+where user_id = (select id from "USER" where email = 'muscle@hexschooltest.io');
+
+update "COACH"
+set experience_years = 5
+where user_id = (select id from "USER" where email = 'starplatinum@hexschooltest.io');
+
+-- 顯示結果 =====================
+-- select
+--   "USER".name as 教練姓名,
+--   "COACH".experience_years as 年資
+-- from "COACH"
+-- inner join "USER" on "COACH".user_id = "USER".id;
+
+-- 進階寫法 =====================
+-- 使用 CASE 表達式來進行批量更新，CASE 表達式在 SQL 中的作用和 JavaScript 中的 if...else 邏輯非常相似。
+-- update "COACH"
+-- set experience_years =
+--   case -- CASE 相當於 if，根據 USER.email 的不同值來設置不同的 experience_years
+--     when "USER".email = 'muscle@hexschooltest.io' than 3 -- WHEN 相當於 else if，THEN 相當於條件為 true 時的結果
+--     when "USER".email = 'starplatinum@hexschooltest.io' than 5
+--     else experience_years -- ELSE 則相當於 else，提供當所有條件都不成立時的默認值
+--   end
+-- from "USER" -- FROM "USER" 連接 USER 表，並根據 COACH.user_id 和 USER.id 進行條件過濾
+-- where "COACH".user_id = "USER".id;
 
 -- 3-4 刪除：新增一個專長 空中瑜伽 至 SKILL 資料表，之後刪除此專長。
+insert into "SKILL" (name) values ('空中瑜伽');
+
+delete from "SKILL"
+where name = '空中瑜伽';
+
 
 ------------------------------------------------------------
 
