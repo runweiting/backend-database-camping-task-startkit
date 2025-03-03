@@ -289,6 +289,32 @@ where name = '空中瑜伽';
     -- 5. 授課結束時間`end_at`設定為2024-11-25 16:00:00
     -- 6. 最大授課人數`max_participants` 設定為10
     -- 7. 授課連結設定`meeting_url`為 https://test-meeting.test.io
+insert into "COURSE" (user_id, skill_id, name, start_at, end_at, max_participants, meeting_url)
+values
+(
+  (select id from "USER" where email = 'lee2000@hexschooltest.io'),
+  (select id from "SKILL" where name = '重訓'),
+  '重訓基礎課',
+  -- PostgreSQL 會自動將 '2024-11-25 14:00:00' 轉換為 timestamp 類型
+  '2024-11-25 14:00:00',
+  '2024-11-25 16:00:00',
+  10,
+  'https://test-meeting.test.io'
+);
+
+-- 顯示結果 =====================
+-- select 
+--   "USER".name as 教練姓名,
+--   "SKILL".name as 教練專長,
+--   "COURSE".name as 課程名稱,
+--   "COURSE".start_at as 開始時間,
+--   "COURSE".end_at as 結束時間,
+--   "COURSE".max_participants as 人數限制,
+--   "COURSE".meeting_url as 授課連結
+-- from "COURSE"
+-- inner join "USER" on "COURSE".user_id = "USER".id
+-- inner join "SKILL" on "COURSE".skill_id = "SKILL".id;
+
 
 ------------------------------------------------------------
 
