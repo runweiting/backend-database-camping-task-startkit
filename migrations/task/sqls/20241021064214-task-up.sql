@@ -88,9 +88,9 @@ select * from "USER" limit 3;
     -- 2. 名稱為`14 堂組合包方案`，價格為`2,520` 元，堂數為`14`
     -- 3. 名稱為 `21 堂組合包方案`，價格為`4,800` 元，堂數為`21`
 insert into "CREDIT_PACKAGE" (name, credit_amount, price) values
-('7 堂組合包方案', 1400, 7),
-('14 堂組合包方案', 2520, 14),
-('21 堂組合包方案', 4800, 21);
+('7 堂組合包方案', 7, 1400),
+('14 堂組合包方案', 14, 2520),
+('21 堂組合包方案', 21, 4800);
 -- 2-2. 新增：在 `CREDIT_PURCHASE` 資料表，新增三筆資料：（請使用 name 欄位做子查詢）
     -- 1. `王小明` 購買 `14 堂組合包方案`
     -- 2. `王小明` 購買 `21 堂組合包方案`
@@ -146,7 +146,7 @@ insert into "COACH" (user_id, experience_years) values
     -- 1. 所有教練都有 `重訓` 專長
     -- 2. 教練`肌肉棒子` 需要有 `瑜伽` 專長
     -- 3. 教練`Q太郎` 需要有 `有氧運動` 與 `復健訓練` 專長
-    -- 資料整理 =====================
+-- 資料整理 =====================
     -- lee2000@hexschooltest.io 重訓
     -- muscle@hexschooltest.io 重訓、瑜伽
     -- starplatinum@hexschooltest.io 重訓、有氧運動、復健訓練`
@@ -335,25 +335,150 @@ values
         -- 1. 預約人設為 `好野人`
         -- 2. 預約時間`booking_at` 設為2024-11-24 16:00:00
         -- 3. 狀態`status` 設定為即將授課
+-- 資料整理 =====================
+        -- `李燕容`，Email 為`lee2000@hexschooltest.io`
+        -- `王小明`，Email 為`wXlTq@hexschooltest.io`
+        -- `好野人`，Email 為`richman@hexschooltest.io`
+-- 🎯 李燕容可能有多門課
+-- 情境 1️⃣：確認李燕容有開重訓基礎課
+-- 👉 李燕容的課程 and name = '重訓基礎課' limit 1
+-- and 確保李燕容有開這門課，如果沒有，則不會插入資料。
+-- 加上 limit 1：避免 course_id 查詢到多筆資料，確保只取得一筆課程 ID，避免 SQL 執行錯誤。
+insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
+values
+(
+  (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
+  (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io') and name = '重訓基礎課' limit 1),
+  '2024-11-24 16:00:00',
+  '即將授課'
+),
+(
+  (select id from "USER" where email = 'richman@hexschooltest.io'),
+  (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io') and name = '重訓基礎課' limit 1),
+  '2024-11-24 16:00:00',
+  '即將授課'
+);
+-- 🛑 潛在問題：如果李燕容沒有開重訓基礎課，INSERT 會插入 NULL，導致錯誤！解決方案：可以在執行 INSERT 之前先查詢，確認 course_id 存在。
+
+-- 情境 2️⃣：不確認李燕容是否有開重訓基礎課
+-- 👉 最安全的方法是：先檢查 course_id 是否存在。如果 course_id 不存在，則不執行 INSERT。
+-- INSERT ... SELECT 避免 NULL：如果 COURSE 沒有找到重訓基礎課，就不會執行 INSERT，避免 NULL 錯誤！
+-- 只執行一次 SELECT：更有效率，不像 VALUES (...) 那樣要執行兩次 SELECT。
+-- 確保 course_id 存在：只有在重訓基礎課存在時，才會插入資料，不會發生 NULL 錯誤。
+-- insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
+-- select
+--   (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
+--   id,
+--   '2024-11-24 16:00:00',
+--   '即將授課'
+-- from "COURSE"
+-- where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
+-- and name = '重訓基礎課'
+-- limit 1;
+
+-- 顯示結果 =====================
+-- select
+--   "USER".name as 客戶姓名,
+--   "COURSE".name as 課程名稱,
+--   booking_at as 預約時間,
+--   status as 課程狀態
+-- from "COURSE_BOOKING"
+-- inner join "USER" on "COURSE_BOOKING".user_id = "USER".id
+-- inner join "COURSE" on "COURSE_BOOKING".course_id = "COURSE".id;
+
 
 -- 5-2. 修改：`王小明`取消預約 `李燕容` 的課程，請在`COURSE_BOOKING`更新該筆預約資料：
     -- 1. 取消預約時間`cancelled_at` 設為2024-11-24 17:00:00
     -- 2. 狀態`status` 設定為課程已取消
+-- 🎯 如果王小明預約了多門課程，但 WHERE 條件只篩選了 user_id，會導致所有王小明預約的課程都被取消。如果只想取消李燕容的課程，應該再加一個條件，確保是李燕容的課程
+-- 👉 王小明預約的課程 && 李燕容開的課
+update "COURSE_BOOKING"
+set
+  cancelled_at = '2024-11-24 17:00:00',
+  status = '課程已取消'
+where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+and course_id = (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io'));
 
--- 5-3. 新增：`王小明`再次預約 `李燕容`   的課程，請在`COURSE_BOOKING`新增一筆資料：
+-- 5-3. 新增：`王小明`再次預約 `李燕容` 的課程，請在`COURSE_BOOKING`新增一筆資料：
     -- 1. 預約人設為`王小明`
     -- 2. 預約時間`booking_at` 設為2024-11-24 17:10:25
     -- 3. 狀態`status` 設定為即將授課
+insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
+select
+  (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
+  id,
+  '2024-11-24 17:10:25',
+  '即將授課'
+from "COURSE"
+where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
+and name = '重訓基礎課'
+limit 1;
+-- 顯示結果 =====================
+-- select
+--   "USER".name as 客戶姓名,
+--   "COURSE".name as 課程名稱,
+--   booking_at as 預約時間,
+--   status as 預約狀態
+-- from "COURSE_BOOKING"
+-- inner join "USER" on "COURSE_BOOKING".user_id = "USER".id
+-- inner join "COURSE" on "COURSE_BOOKING".course_id = "COURSE".id;
 
 -- 5-4. 查詢：取得王小明所有的預約紀錄，包含取消預約的紀錄
+select
+  "USER".name as 客戶姓名,
+  "COURSE".name as 課程名稱,
+  booking_at as 預約時間,
+  status as 預約狀態
+from "COURSE_BOOKING"
+inner join "USER" on "COURSE_BOOKING".user_id = "USER".id
+inner join "COURSE" on "COURSE_BOOKING".course_id = "COURSE".id
+where "USER".email = 'wXlTq@hexschooltest.io'
+order by booking_at desc;
 
 -- 5-5. 修改：`王小明` 現在已經加入直播室了，請在`COURSE_BOOKING`更新該筆預約資料（請注意，不要更新到已經取消的紀錄）：
     -- 1. 請在該筆預約記錄他的加入直播室時間 `join_at` 設為2024-11-25 14:01:59
     -- 2. 狀態`status` 設定為上課中
+-- 資料整理 =====================
+-- 王小明的課 and status = '即將授課'，修改多個欄位：join_at, status
+update "COURSE_BOOKING"
+set
+  join_at = '2024-11-25 14:01:59',
+  status = '上課中'
+where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+and status = '即將授課';
+-- 顯示結果 =====================
+-- select
+--   "USER".name as 客戶名稱,
+--   "COURSE".name as 課程名稱,
+--   "COURSE_BOOKING".booking_at as 預約時間,
+--   "COURSE_BOOKING".status as 預約狀態,
+--   "COURSE_BOOKING".join_at as 加入時間
+-- from "COURSE_BOOKING"
+-- inner join "USER" on "COURSE_BOOKING".user_id = "USER".id
+-- inner join "COURSE" on "COURSE_BOOKING".course_id = "COURSE".id;
 
 -- 5-6. 查詢：計算用戶王小明的購買堂數，顯示須包含以下欄位： user_id , total。 (需使用到 SUM 函式與 Group By)
+-- 資料整理 =====================
+-- 王小明購買的總堂數
+-- 🎯 "USER" u 資料表別名寫法
+select
+  user_id as 客戶編號,
+  SUM(purchased_credits) as 購買總堂數,
+  SUM(price_paid) as 購買總金額
+from "CREDIT_PURCHASE" cp
+where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+group by user_id;
 
 -- 5-7. 查詢：計算用戶王小明的已使用堂數，顯示須包含以下欄位： user_id , total。 (需使用到 Count 函式與 Group By)
+-- 資料整理 =====================
+-- 👉 王小明的已使用堂數 = 王小明預約的課程 && status = '上課中'
+select
+  user_id,
+  COUNT(*) as 已使用堂數 
+from "COURSE_BOOKING"
+where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+and status = '上課中'
+group by user_id;
 
 -- 5-8. [挑戰題] 查詢：請在一次查詢中，計算用戶王小明的剩餘可用堂數，顯示須包含以下欄位： user_id , remaining_credit
     -- 提示：
@@ -361,6 +486,47 @@ values
     -- from ( 用戶王小明的購買堂數 ) as "CREDIT_PURCHASE"
     -- inner join ( 用戶王小明的已使用堂數) as "COURSE_BOOKING"
     -- on "COURSE_BOOKING".user_id = "CREDIT_PURCHASE".user_id;
+-- 資料整理 =====================
+-- 👉 王小明的剩餘可用堂數 = 王小明已購買堂數 - 已使用堂數
+-- 👉 先新增欄位 total_credit, used_credit
+-- select
+--   ("CREDIT_PURCHASE".total_credit - "COURSE_BOOKING".used_credit) as remaining_credit
+-- from (
+--   select user_id, SUM(purchased_credits) as total_credit
+--   from "CREDIT_PURCHASE"
+--   where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+--   group by user_id
+--   ) as "CREDIT_PURCHASE"
+-- inner join (
+--   select user_id, COUNT(*) as used_credit
+--   from "COURSE_BOOKING"
+--   where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+--   and status = '上課中'
+--   group by user_id
+-- ) as "COURSE_BOOKING"
+-- on "COURSE_BOOKING".user_id = "CREDIT_PURCHASE".user_id;
+-- ❌ 主要問題
+-- 1. 兩個子查詢內 where 可以統一放到主查詢
+-- 2. 當用戶沒有購買課程或沒有上課時，可能出現 NULL 問題，使用 COALESCE() 來處理
+-- 3. INNER JOIN 可能會漏掉用戶，如果用戶有購買堂數，但還沒上過課，INNER JOIN 會導致該用戶不出現在結果中。改用 LEFT JOIN，確保即使用戶還沒開始上課，仍然能查出正確的 remaining_credit。
+-- ✅ 解決方案
+select
+  cp.user_id,
+  COALESCE(cp.total_credit, 0) - COALESCE(cb.used_credit, 0) as remaining_credit
+from (
+  select user_id, SUM(purchased_credits) as total_credit
+  from "CREDIT_PURCHASE"
+  group by user_id
+  ) as cp
+left join (
+  select user_id, COUNT(*) as used_credit
+  from "COURSE_BOOKING"
+  where status = '上課中'
+  group by user_id
+) as cb
+on cb.user_id = cp.user_id
+where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io');
+
 
 ------------------------------------------------------------
 
