@@ -488,7 +488,6 @@ group by user_id;
     -- on "COURSE_BOOKING".user_id = "CREDIT_PURCHASE".user_id;
 -- 資料整理 =====================
 -- 👉 王小明的剩餘可用堂數 = 王小明已購買堂數 - 已使用堂數
--- 👉 先新增欄位 total_credit, used_credit
 -- select
 --   ("CREDIT_PURCHASE".total_credit - "COURSE_BOOKING".used_credit) as remaining_credit
 -- from (
@@ -506,25 +505,25 @@ group by user_id;
 -- ) as "COURSE_BOOKING"
 -- on "COURSE_BOOKING".user_id = "CREDIT_PURCHASE".user_id;
 -- ❌ 主要問題
--- 1. 兩個子查詢內 where 可以統一放到主查詢
+-- 1. 兩個子查詢內 where 可統一放到主查詢
 -- 2. 當用戶沒有購買課程或沒有上課時，可能出現 NULL 問題，使用 COALESCE() 來處理
--- 3. INNER JOIN 可能會漏掉用戶，如果用戶有購買堂數，但還沒上過課，INNER JOIN 會導致該用戶不出現在結果中。改用 LEFT JOIN，確保即使用戶還沒開始上課，仍然能查出正確的 remaining_credit。
+-- 3. INNER JOIN 可能會漏掉用戶，如果用戶有購買堂數，但還沒上過課，INNER JOIN 會導致該用戶不出現在結果中。改用 LEFT JOIN(確保 cp 資料都有)，即使用戶還沒開始上課，仍然能查出正確的 remaining_credit。
 -- ✅ 解決方案
+-- 👉 剩餘可用堂數 = 已購買堂數(from "CREDIT_PURCHASE") - 已使用堂數(from "COURSE_BOOKING")
+-- 👉 以 "CREDIT_PURCHASE" 為主(左)，新增欄位 total_credit, used_credit，left join "COURSE_BOOKING"(右)
+-- 👉 from ("CREDIT_PURCHASE".total_credit 子查詢) left join ("COURSE_BOOKING".used_credit 子查詢) on ...
 select
   cp.user_id,
-  COALESCE(cp.total_credit, 0) - COALESCE(cb.used_credit, 0) as remaining_credit
+  coalesce(cp.total_credit, 0) - coalesce(cb.used_credit, 0) as remaining_credit
 from (
   select user_id, SUM(purchased_credits) as total_credit
-  from "CREDIT_PURCHASE"
-  group by user_id
-  ) as cp
+  from "CREDIT_PURCHASE" group by user_id
+) as cp
 left join (
-  select user_id, COUNT(*) as used_credit
-  from "COURSE_BOOKING"
-  where status = '上課中'
-  group by user_id
+  select user_id, COUNT(status) as used_credit
+  from "COURSE_BOOKING" where status = '上課中' group by user_id
 ) as cb
-on cb.user_id = cp.user_id
+on cp.user_id = cb.user_id
 where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io');
 
 
@@ -539,15 +538,81 @@ where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io'
 -- 6. 後台報表
 -- 6-1 查詢：查詢專長為重訓的教練，並按經驗年數排序，由資深到資淺（需使用 inner join 與 order by 語法)
 -- 顯示須包含以下欄位： 教練名稱 , 經驗年數, 專長名稱
+-- 資料整理 =====================
+-- 👉 以 "COACH" 為主, inner join "COACH_LINK_SKILL", "SKILL"
+-- 👉 where name = '重訓', order by experience_years desc
+-- 🎯 INNER JOIN 順序調整：
+-- 1. 先連接 1<>1，COACH 和 USER，減少不必要的資料量。
+-- 2. 再 JOIN COACH_LINK_SKILL 和 SKILL，確保只拿到對應的專長。
+-- 3. LOWER(s.name) = '重訓'，可避免大小寫問題，如果 SKILL.name 是 TEXT 型別，可能會區分大小寫
+select
+  u.name as 教練名稱,
+  c.experience_years as 經驗年數,
+  s.name as 專長名稱
+from "COACH" c
+inner join "USER" u on c.user_id = u.id 
+inner join "COACH_LINK_SKILL" cls on c.id = cls.coach_id 
+inner join "SKILL" s on cls.skill_id = s.id 
+where s.name = '重訓'
+order by c.experience_years desc;
 
 -- 6-2 查詢：查詢每種專長的教練數量，並只列出教練數量最多的專長（需使用 group by, inner join 與 order by 與 limit 語法）
 -- 顯示須包含以下欄位： 專長名稱, coach_total
+-- 資料整理 =====================
+-- 👉 select 專長名稱、SUM(教練數量) as coach_total from "COACH_LINK_SKILL"
+-- inner join "SKILL"
+-- group by 專長 id，order by 教練數量 limit 1
+-- 🎯 主要優化點：
+-- 1. COUNT(cls.coach_id) 改為 COUNT(*)，cls.coach_id 不會是 NULL，COUNT(*) 直接計算行數效率更高，而不會去檢查特定欄位是否為 NULL。
+-- 2. 確保 SKILL.name 唯一，如果 SKILL.name 在資料表裡可能重複（但 id 是唯一的），最好 GROUP BY s.id 再 ORDER BY s.name，以免潛在的 GROUP BY 混亂。
+select
+  s.name as 專長名稱,
+  count(*) as coach_total
+from "COACH_LINK_SKILL" cls
+inner join "SKILL" s on cls.skill_id = s.id 
+group by s.id, s.name
+order by coach_total desc limit 1;
 
 -- 6-3. 查詢：計算 11 月份組合包方案的銷售數量
 -- 顯示須包含以下欄位： 組合包方案名稱, 銷售數量
+-- 資料整理 =====================
+-- 👉 以 "CREDIT_PACKAGE" 為主，inner join "CREDIT_PURCHASE"
+-- select 組合包方案名稱, count(*) as 銷售數量, group by cp.id, order by 銷售數量
+-- where purchase_at between `2025-11-01 00:00:00.000` and `2025-11-30 23:59:59.999`
+select
+  cpk.name as 組合包方案名稱,
+  COUNT(cpe.credit_package_id) as sale_total
+from "CREDIT_PACKAGE" cpk
+inner join "CREDIT_PURCHASE" cpe on cpk.id = cpe.credit_package_id
+where cpe.purchase_at between '2025-11-01 00:00:00.000'::timestamp and '2025-11-30 23:59:59.999'::timestamp
+group by cpk.id, cpk.name
+order by sale_total desc;
 
 -- 6-4. 查詢：計算 11 月份總營收（使用 purchase_at 欄位統計）
 -- 顯示須包含以下欄位： 總營收
+-- 資料整理 =====================
+-- 🎯 主要優化點：
+-- 1. 確保 price_paid 欄位不會有 NULL 值影響 SUM，SUM(NULL) 會回傳 NULL，用 COALESCE() 來確保返回 0
+-- 2. 使用 DATE_TRUNC() 日期截取函數，將日期或時間欄位截斷到指定的時間單位
+-- 1️⃣ DATE_TRUNC('month', cp.purchase_at)：將所有欄位的 purchase_at 時間截斷到「當月的 1 號 00:00:00」
+-- 2025-11-05 14:30:00 👉 2025-11-01 00:00:00
+-- 2025-12-03 10:05:20 👉 2025-12-01 00:00:00
+-- 2️⃣ = '2025-11-01'::date：只保留 👉 等於 2025-11-01 的資料，也就是篩選 2025 年 11 月的所有記錄
+select
+  coalesce(SUM(cp.price_paid), 0) as 總營收
+from "CREDIT_PURCHASE" cp
+where DATE_TRUNC('month', cp.purchase_at) = '2025-11-01'::date;
 
 -- 6-5. 查詢：計算 11 月份有預約課程的會員人數（需使用 Distinct，並用 created_at 和 status 欄位統計）
 -- 顯示須包含以下欄位： 預約會員人數
+-- 資料整理 =====================
+-- 🎯 N<>N，同一個會員可能預約多次「同一個課程」或「不同課程」，又可能有不同的狀態如：即將授課、上課中、取消預約
+-- 1. from "COURSE_BOOKING" select 預約會員人數
+-- 2. 先 where 篩選 status = '即將授課' or '上課中'
+-- 3. 最後 DISTINCT user_id 不重複計算
+select
+  COUNT(distinct cb.user_id) as 預約會員人數 -- 確保每個會員只計算一次，不會因為多次預約而重複計算
+from "COURSE_BOOKING" cb
+where (cb.status = '即將授課' or cb.status = '上課中')
+and DATE_TRUNC('month', cb.created_at) = DATE '2025-11-01'; -- 這樣寫不需強制轉型 
+
