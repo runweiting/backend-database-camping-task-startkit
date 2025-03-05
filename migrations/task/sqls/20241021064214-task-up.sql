@@ -254,15 +254,15 @@ where user_id = (select id from "USER" where email = 'starplatinum@hexschooltest
 
 -- 進階寫法 =====================
 -- 使用 CASE 表達式來進行批量更新，CASE 表達式在 SQL 中的作用和 JavaScript 中的 if...else 邏輯非常相似。
-update "COACH"
-set experience_years =
-  case -- CASE 相當於 if，根據 USER.email 的不同值來設置不同的 experience_years
-    when "USER".email = 'muscle@hexschooltest.io' than 3 -- WHEN 相當於 else if，THEN 相當於條件為 true 時的結果
-    when "USER".email = 'starplatinum@hexschooltest.io' than 5
-    else experience_years -- ELSE 則相當於 else，提供當所有條件都不成立時的默認值
-  end
-from "USER" -- FROM "USER" 連接 USER 表，並根據 COACH.user_id 和 USER.id 進行條件過濾
-where "COACH".user_id = "USER".id;
+-- update "COACH"
+-- set experience_years =
+--   case -- CASE 相當於 if，根據 USER.email 的不同值來設置不同的 experience_years
+--     when "USER".email = 'muscle@hexschooltest.io' than 3 -- WHEN 相當於 else if，THEN 相當於條件為 true 時的結果
+--     when "USER".email = 'starplatinum@hexschooltest.io' than 5
+--     else experience_years -- ELSE 則相當於 else，提供當所有條件都不成立時的默認值
+--   end
+-- from "USER" -- FROM "USER" 連接 USER 表，並根據 COACH.user_id 和 USER.id 進行條件過濾
+-- where "COACH".user_id = "USER".id;
 
 -- 3-4 刪除：新增一個專長 空中瑜伽 至 SKILL 資料表，之後刪除此專長。
 insert into "SKILL" (name) values ('空中瑜伽');
@@ -374,16 +374,16 @@ values
 -- 因為 INSERT INTO ... SELECT ... 的特性：
   -- 1. SELECT 產生的結果決定 INSERT 是否執行
   -- 2. 當無匹配數據時，SELECT 返回空結果，INSERT 根本沒有東西可插入，因此不會發生任何寫入操作
-insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
-select
-  (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
-  id,
-  '2024-11-24 16:00:00',
-  '即將授課'
-from "COURSE"
-where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
-and name = '重訓基礎課'
-limit 1;
+-- insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
+-- select
+--   (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
+--   id,
+--   '2024-11-24 16:00:00',
+--   '即將授課'
+-- from "COURSE"
+-- where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
+-- and name = '重訓基礎課'
+-- limit 1;
 
 -- 顯示結果 =====================
 -- select
@@ -600,14 +600,14 @@ order by coach_total desc limit 1;
 -- select 組合包方案名稱, count(*) as 銷售數量, group by cp.id, order by 銷售數量
 -- where purchase_at between `2025-02-01 00:00:00.000` and `2025-02-28 23:59:59.999`
 -- 1️⃣ inner join 寫法：只顯示有銷售的方案、不會顯示沒銷售的方案
-select
-  cpk.name as 組合包方案名稱,
-  COUNT(cpe.credit_package_id) as sale_total
-from "CREDIT_PACKAGE" cpk
-inner join "CREDIT_PURCHASE" cpe on cpk.id = cpe.credit_package_id
-where cpe.purchase_at between '2025-02-01 00:00:00.000'::timestamp and '2025-02-28 23:59:59.999'::timestamp
-group by cpk.id, cpk.name
-order by sale_total desc;
+-- select
+--   cpk.name as 組合包方案名稱,
+--   COUNT(cpe.credit_package_id) as sale_total
+-- from "CREDIT_PACKAGE" cpk
+-- inner join "CREDIT_PURCHASE" cpe on cpk.id = cpe.credit_package_id
+-- where cpe.purchase_at between '2025-02-01 00:00:00.000'::timestamp and '2025-02-28 23:59:59.999'::timestamp
+-- group by cpk.id, cpk.name
+-- order by sale_total desc;
 -- 🎯 主要優化點：改為 LEFT JOIN 可確保所有 CREDIT_PACKAGE 都會出現在結果中
 -- 🎯 WHERE 條件會直接排除 NULL 值：所以 left join 的篩選條件要寫在 on 之後
 -- 2️⃣ left join 寫法：顯示所有方案、未售出的 sale_total = 0
