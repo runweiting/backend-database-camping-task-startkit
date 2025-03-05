@@ -254,15 +254,15 @@ where user_id = (select id from "USER" where email = 'starplatinum@hexschooltest
 
 -- 進階寫法 =====================
 -- 使用 CASE 表達式來進行批量更新，CASE 表達式在 SQL 中的作用和 JavaScript 中的 if...else 邏輯非常相似。
--- update "COACH"
--- set experience_years =
---   case -- CASE 相當於 if，根據 USER.email 的不同值來設置不同的 experience_years
---     when "USER".email = 'muscle@hexschooltest.io' than 3 -- WHEN 相當於 else if，THEN 相當於條件為 true 時的結果
---     when "USER".email = 'starplatinum@hexschooltest.io' than 5
---     else experience_years -- ELSE 則相當於 else，提供當所有條件都不成立時的默認值
---   end
--- from "USER" -- FROM "USER" 連接 USER 表，並根據 COACH.user_id 和 USER.id 進行條件過濾
--- where "COACH".user_id = "USER".id;
+update "COACH"
+set experience_years =
+  case -- CASE 相當於 if，根據 USER.email 的不同值來設置不同的 experience_years
+    when "USER".email = 'muscle@hexschooltest.io' than 3 -- WHEN 相當於 else if，THEN 相當於條件為 true 時的結果
+    when "USER".email = 'starplatinum@hexschooltest.io' than 5
+    else experience_years -- ELSE 則相當於 else，提供當所有條件都不成立時的默認值
+  end
+from "USER" -- FROM "USER" 連接 USER 表，並根據 COACH.user_id 和 USER.id 進行條件過濾
+where "COACH".user_id = "USER".id;
 
 -- 3-4 刪除：新增一個專長 空中瑜伽 至 SKILL 資料表，之後刪除此專長。
 insert into "SKILL" (name) values ('空中瑜伽');
@@ -341,9 +341,7 @@ values
         -- `好野人`，Email 為`richman@hexschooltest.io`
 -- 🎯 李燕容可能有多門課
 -- 情境 1️⃣：確認李燕容有開重訓基礎課
--- 👉 李燕容的課程 and name = '重訓基礎課' limit 1
--- and 確保李燕容有開這門課，如果沒有，則不會插入資料。
--- 加上 limit 1：避免 course_id 查詢到多筆資料，確保只取得一筆課程 ID，避免 SQL 執行錯誤。
+-- 👉 李燕容的課程 and name = '重訓基礎課' limit 1 避免 course_id 查詢到多筆資料
 insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
 values
 (
@@ -358,23 +356,34 @@ values
   '2024-11-24 16:00:00',
   '即將授課'
 );
--- 🛑 潛在問題：如果李燕容沒有開重訓基礎課，INSERT 會插入 NULL，導致錯誤！解決方案：可以在執行 INSERT 之前先查詢，確認 course_id 存在。
+-- 🛑 潛在問題：INSERT INTO ... VALUES (...) 不會自動檢查 course_id 是否存在，如果值是 NULL，它會直接插入（除非 NOT NULL 限制）。如果李燕容沒有開重訓基礎課，INSERT 會插入 NULL，導致錯誤！
+-- ✅ 解決方案：可以在執行 INSERT 之前先查詢，確認 course_id 存在。
 
 -- 情境 2️⃣：不確認李燕容是否有開重訓基礎課
--- 👉 最安全的方法是：先檢查 course_id 是否存在。如果 course_id 不存在，則不執行 INSERT。
--- INSERT ... SELECT 避免 NULL：如果 COURSE 沒有找到重訓基礎課，就不會執行 INSERT，避免 NULL 錯誤！
--- 只執行一次 SELECT：更有效率，不像 VALUES (...) 那樣要執行兩次 SELECT。
--- 確保 course_id 存在：只有在重訓基礎課存在時，才會插入資料，不會發生 NULL 錯誤。
--- insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
--- select
---   (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
---   id,
---   '2024-11-24 16:00:00',
---   '即將授課'
--- from "COURSE"
--- where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
--- and name = '重訓基礎課'
--- limit 1;
+-- ✅ 安全方法：INSERT INTO ... SELECT ... 方式會隱式檢查是否有符合條件的 course_id，如果沒有則不執行 INSERT。
+-- 執行順序如下：
+-- 1️⃣ 執行子查詢 (查找 user_id)
+-- 2️⃣ 執行主查詢 (查找 course_id)
+-- 3️⃣ 組合 SELECT 結果：
+  -- 如有符合條件的課程 SELECT 返回：(user_id, course_id, '2024-11-24 16:00:00', '即將授課')
+  -- 如查詢結果為空（沒有符合條件的課程）SELECT 不會返回任何資料
+-- 4️⃣ 執行 INSERT INTO
+  -- 如果 SELECT 有回傳資料，則 INSERT 會將這些值插入 COURSE_BOOKING 表
+  -- 如果 SELECT 沒有回傳任何資料（即 course_id 不存在），則 INSERT 不會執行，因為沒有數據可插入
+-- 🎯 為什麼 INSERT 會自動檢查 course_id 是否存在？
+-- 因為 INSERT INTO ... SELECT ... 的特性：
+  -- 1. SELECT 產生的結果決定 INSERT 是否執行
+  -- 2. 當無匹配數據時，SELECT 返回空結果，INSERT 根本沒有東西可插入，因此不會發生任何寫入操作
+insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
+select
+  (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
+  id,
+  '2024-11-24 16:00:00',
+  '即將授課'
+from "COURSE"
+where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io')
+and name = '重訓基礎課'
+limit 1;
 
 -- 顯示結果 =====================
 -- select
@@ -390,19 +399,20 @@ values
 -- 5-2. 修改：`王小明`取消預約 `李燕容` 的課程，請在`COURSE_BOOKING`更新該筆預約資料：
     -- 1. 取消預約時間`cancelled_at` 設為2024-11-24 17:00:00
     -- 2. 狀態`status` 設定為課程已取消
--- 🎯 如果王小明預約了多門課程，但 WHERE 條件只篩選了 user_id，會導致所有王小明預約的課程都被取消。如果只想取消李燕容的課程，應該再加一個條件，確保是李燕容的課程
--- 👉 王小明預約的課程 && 李燕容開的課
+-- 🎯 如果王小明預約了多門課程，但 WHERE 條件只篩選了 user_id，會導致所有王小明預約的課程都被取消。如果只想取消李燕容開的 course_id 課程，應該再加一個條件，確保是李燕容開的 course_id 課程
+-- 👉 王小明預約的課程 && 李燕容開的 course_id 課程
 update "COURSE_BOOKING"
 set
   cancelled_at = '2024-11-24 17:00:00',
   status = '課程已取消'
 where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
-and course_id = (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io'));
+and course_id = (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io'))
+and status = '即將授課';
 
 -- 5-3. 新增：`王小明`再次預約 `李燕容` 的課程，請在`COURSE_BOOKING`新增一筆資料：
     -- 1. 預約人設為`王小明`
-    -- 2. 預約時間`booking_at` 設為2024-11-24 17:10:25
-    -- 3. 狀態`status` 設定為即將授課
+    -- 2. 再次預約重訓基礎課、預約時間 booking_at 設為2024-11-24 17:10:25
+    -- 3. 狀態 status 設定為即將授課
 insert into "COURSE_BOOKING" (user_id, course_id, booking_at, status)
 select
   (select id from "USER" where email = 'wXlTq@hexschooltest.io'),
@@ -425,7 +435,7 @@ limit 1;
 
 -- 5-4. 查詢：取得王小明所有的預約紀錄，包含取消預約的紀錄
 select
-  "USER".name as 客戶姓名,
+  "USER".name as 客戶姓名, -- 也可以寫 "USER".* 查詢全部欄位
   "COURSE".name as 課程名稱,
   booking_at as 預約時間,
   status as 預約狀態
@@ -440,11 +450,14 @@ order by booking_at desc;
     -- 2. 狀態`status` 設定為上課中
 -- 資料整理 =====================
 -- 王小明的課 and status = '即將授課'，修改多個欄位：join_at, status
+-- ❌ 錯誤原因 → 要加上 where 篩選出是李燕容的課程
+-- ✅ 修改如下
 update "COURSE_BOOKING"
 set
   join_at = '2024-11-25 14:01:59',
   status = '上課中'
 where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
+and course_id = (select id from "COURSE" where user_id = (select id from "USER" where email = 'lee2000@hexschooltest.io'))
 and status = '即將授課';
 -- 顯示結果 =====================
 -- select
@@ -462,22 +475,24 @@ and status = '即將授課';
 -- 王小明購買的總堂數
 -- 🎯 "USER" u 資料表別名寫法
 select
-  user_id as 客戶編號,
+  cp.user_id as 客戶編號,
   SUM(purchased_credits) as 購買總堂數,
   SUM(price_paid) as 購買總金額
 from "CREDIT_PURCHASE" cp
 where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
-group by user_id;
+group by cp.user_id;
 
 -- 5-7. 查詢：計算用戶王小明的已使用堂數，顯示須包含以下欄位： user_id , total。 (需使用到 Count 函式與 Group By)
 -- 資料整理 =====================
 -- 👉 王小明的已使用堂數 = 王小明預約的課程 && status = '上課中'
+-- ❌ 錯誤原因 → 可以使用 status != '課程已取消'
+-- ✅ 修改如下
 select
   user_id,
   COUNT(*) as 已使用堂數 
 from "COURSE_BOOKING"
 where user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io')
-and status = '上課中'
+and status != '課程已取消' -- 也可以寫 status NOT IN ('課程已取消')
 group by user_id;
 
 -- 5-8. [挑戰題] 查詢：請在一次查詢中，計算用戶王小明的剩餘可用堂數，顯示須包含以下欄位： user_id , remaining_credit
@@ -542,9 +557,13 @@ where cp.user_id = (select id from "USER" where email = 'wXlTq@hexschooltest.io'
 -- 👉 以 "COACH" 為主, inner join "COACH_LINK_SKILL", "SKILL"
 -- 👉 where name = '重訓', order by experience_years desc
 -- 🎯 INNER JOIN 順序調整：
--- 1. 先連接 1<>1，COACH 和 USER，減少不必要的資料量。
--- 2. 再 JOIN COACH_LINK_SKILL 和 SKILL，確保只拿到對應的專長。
--- 3. LOWER(s.name) = '重訓'，可避免大小寫問題，如果 SKILL.name 是 TEXT 型別，可能會區分大小寫
+  -- 1. 先連接 1<>1，COACH 和 USER，減少不必要的資料量。
+  -- 2. 再 JOIN COACH_LINK_SKILL 和 SKILL，確保只拿到對應的專長。
+  -- 3. LOWER(s.name) = '重訓'，可避免大小寫問題，如果 SKILL.name 是 TEXT 型別，可能會區分大小寫
+-- 🎯 SQL 查詢的執行順序一般如下：
+  -- 1. 先處理 FROM 和 JOIN（確保所有表已關聯）
+  -- 2. 再處理 WHERE 過濾條件（篩選符合條件的資料）
+  -- 3. 最後執行 ORDER BY、SELECT 等
 select
   u.name as 教練名稱,
   c.experience_years as 經驗年數,
@@ -563,8 +582,9 @@ order by c.experience_years desc;
 -- inner join "SKILL"
 -- group by 專長 id，order by 教練數量 limit 1
 -- 🎯 主要優化點：
--- 1. COUNT(cls.coach_id) 改為 COUNT(*)，cls.coach_id 不會是 NULL，COUNT(*) 直接計算行數效率更高，而不會去檢查特定欄位是否為 NULL。
--- 2. 確保 SKILL.name 唯一，如果 SKILL.name 在資料表裡可能重複（但 id 是唯一的），最好 GROUP BY s.id 再 ORDER BY s.name，以免潛在的 GROUP BY 混亂。
+-- 1. COUNT(cls.coach_id) 改為 COUNT(*)，因為 cls.coach_id 不會是 NULL，直接計算行數效率更高。
+-- 2. s.id 是 SKILL 表的主鍵、索引鍵，所以 GROUP BY s.id 已足夠，不需要再加 s.name，直接用 s.id 分組會更快。
+-- 3. 如果想增加可讀性： GROUP BY s.id, s.name 也沒問題
 select
   s.name as 專長名稱,
   count(*) as coach_total
@@ -573,35 +593,48 @@ inner join "SKILL" s on cls.skill_id = s.id
 group by s.id, s.name
 order by coach_total desc limit 1;
 
--- 6-3. 查詢：計算 11 月份組合包方案的銷售數量
+-- 6-3. 查詢：計算 2 月份組合包方案的銷售數量
 -- 顯示須包含以下欄位： 組合包方案名稱, 銷售數量
 -- 資料整理 =====================
 -- 👉 以 "CREDIT_PACKAGE" 為主，inner join "CREDIT_PURCHASE"
 -- select 組合包方案名稱, count(*) as 銷售數量, group by cp.id, order by 銷售數量
--- where purchase_at between `2025-11-01 00:00:00.000` and `2025-11-30 23:59:59.999`
+-- where purchase_at between `2025-02-01 00:00:00.000` and `2025-02-28 23:59:59.999`
+-- 1️⃣ inner join 寫法：只顯示有銷售的方案、不會顯示沒銷售的方案
 select
   cpk.name as 組合包方案名稱,
   COUNT(cpe.credit_package_id) as sale_total
 from "CREDIT_PACKAGE" cpk
 inner join "CREDIT_PURCHASE" cpe on cpk.id = cpe.credit_package_id
-where cpe.purchase_at between '2025-11-01 00:00:00.000'::timestamp and '2025-11-30 23:59:59.999'::timestamp
+where cpe.purchase_at between '2025-02-01 00:00:00.000'::timestamp and '2025-02-28 23:59:59.999'::timestamp
+group by cpk.id, cpk.name
+order by sale_total desc;
+-- 🎯 主要優化點：改為 LEFT JOIN 可確保所有 CREDIT_PACKAGE 都會出現在結果中
+-- 🎯 WHERE 條件會直接排除 NULL 值：所以 left join 的篩選條件要寫在 on 之後
+-- 2️⃣ left join 寫法：顯示所有方案、未售出的 sale_total = 0
+select
+  cpk.name as 組合包方案名稱,
+  COUNT(cpe.credit_package_id) as sale_total
+from "CREDIT_PACKAGE" cpk
+left join "CREDIT_PURCHASE" cpe on cpk.id = cpe.credit_package_id
+  and cpe.purchase_at between '2025-02-01 00:00:00.000'::timestamp and '2025-02-28 23:59:59.999'::timestamp
 group by cpk.id, cpk.name
 order by sale_total desc;
 
--- 6-4. 查詢：計算 11 月份總營收（使用 purchase_at 欄位統計）
+
+-- 6-4. 查詢：計算 2 月份總營收（使用 purchase_at 欄位統計）
 -- 顯示須包含以下欄位： 總營收
 -- 資料整理 =====================
 -- 🎯 主要優化點：
 -- 1. 確保 price_paid 欄位不會有 NULL 值影響 SUM，SUM(NULL) 會回傳 NULL，用 COALESCE() 來確保返回 0
 -- 2. 使用 DATE_TRUNC() 日期截取函數，將日期或時間欄位截斷到指定的時間單位
 -- 1️⃣ DATE_TRUNC('month', cp.purchase_at)：將所有欄位的 purchase_at 時間截斷到「當月的 1 號 00:00:00」
--- 2025-11-05 14:30:00 👉 2025-11-01 00:00:00
+-- 2025-02-05 14:30:00 👉 2025-02-01 00:00:00
 -- 2025-12-03 10:05:20 👉 2025-12-01 00:00:00
--- 2️⃣ = '2025-11-01'::date：只保留 👉 等於 2025-11-01 的資料，也就是篩選 2025 年 11 月的所有記錄
+-- 2️⃣ = '2025-02-01'::date：只保留 👉 等於 2025-02-01 的資料，也就是篩選 2025 年 2 月的所有記錄
 select
   coalesce(SUM(cp.price_paid), 0) as 總營收
 from "CREDIT_PURCHASE" cp
-where DATE_TRUNC('month', cp.purchase_at) = '2025-11-01'::date;
+where DATE_TRUNC('month', cp.purchase_at) = '2025-02-01'::date;
 
 -- 6-5. 查詢：計算 11 月份有預約課程的會員人數（需使用 Distinct，並用 created_at 和 status 欄位統計）
 -- 顯示須包含以下欄位： 預約會員人數
@@ -613,6 +646,6 @@ where DATE_TRUNC('month', cp.purchase_at) = '2025-11-01'::date;
 select
   COUNT(distinct cb.user_id) as 預約會員人數 -- 確保每個會員只計算一次，不會因為多次預約而重複計算
 from "COURSE_BOOKING" cb
-where (cb.status = '即將授課' or cb.status = '上課中')
-and DATE_TRUNC('month', cb.created_at) = DATE '2025-11-01'; -- 這樣寫不需強制轉型 
+where cb.status != '課程已取消'
+and DATE_TRUNC('month', cb.created_at) = DATE '2025-03-01'; -- 這樣寫不需強制轉型 
 
